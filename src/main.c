@@ -3,6 +3,7 @@
 
 #include <err.h>
 #include <gst/gst.h>
+#include <math.h>
 #include <pthread.h>
 #include <pulse/pulseaudio.h>
 #include <stdio.h>
@@ -121,9 +122,15 @@ static void print_audio_sources(void) {
 
 	pthread_barrier_wait(&barrier);
 
+	uint32_t largest_index = 0;
 	for(size_t i = 0; i < audioSources.len; i++) {
 		AudioSource it = audioSources.ptr[i];
-		printf("%u: %s\n", it.index, it.name);
+		if(it.index > largest_index) largest_index = it.index;
+	}
+
+	for(size_t i = 0; i < audioSources.len; i++) {
+		AudioSource it = audioSources.ptr[i];
+		printf("%*u: %s\n", (int) log10(largest_index) + 2, it.index, it.name);
 	}
 }
 

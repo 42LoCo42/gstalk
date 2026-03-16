@@ -12,7 +12,7 @@ executable(
 	'gstalk',
 	'src/main.c',
 	c_args: [],
-	link_args: [],
+	link_args: ['-lm'],
 	dependencies: [
 		dependency('gstreamer-1.0'),
 		dependency('libpulse'),
