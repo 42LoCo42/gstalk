@@ -35,7 +35,6 @@
               gstreamer
               gst-plugins-base
               gst-plugins-good
-              glib-networking
             ];
 
           mesonBuildType = "release";
