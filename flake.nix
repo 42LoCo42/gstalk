@@ -48,8 +48,9 @@
 
           packages = with pkgs; [
             clang-tools
-            qpwgraph
             just
+            pulseaudio
+            qpwgraph
           ];
         };
       });

@@ -7,8 +7,9 @@
 - run =gstalk rx <port>= to listen on that UDP port
 
 ** transmitter
-- run =gstalk ls= to list all pulseaudio sink inputs (aka apps that play audio)
-- grab the device ID of the thing you wanna stream
+- run =gstalk ls= to list all pulseaudio audio sources
+  (incl. individual sink inputs)
+- grab the ID of the thing you wanna stream
 - run =gstalk tx <receiver host> <receiver port> <ID>=
-- or if you don't provide an ID, all sink inputs will be printed
+- or if you don't provide an ID, all audio sources will be printed
   and you will be asked for the ID

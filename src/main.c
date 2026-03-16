@@ -49,12 +49,22 @@ static AudioSources audioSources = {0};
 
 static pthread_barrier_t barrier = {0};
 
-static void sink_info_cb(
-	pa_context* context, const pa_sink_input_info* i, int is_last, void*
-) {
+static void
+pa_source_cb(pa_context*, const pa_source_info* i, int is_last, void*) {
+	if(is_last) return;
+
+	AudioSource source = {
+		.index = i->index,
+		.name  = strdup(i->description),
+	};
+
+	ArrayAdd(audioSources, source);
+}
+
+static void
+pa_sink_input_cb(pa_context*, const pa_sink_input_info* i, int is_last, void*) {
 	if(is_last) {
 		pthread_barrier_wait(&barrier);
-		pa_context_disconnect(context);
 		return;
 	}
 
@@ -74,9 +84,8 @@ static void sink_info_cb(
 static void context_cb(pa_context* context, void*) {
 	switch(pa_context_get_state(context)) {
 	case PA_CONTEXT_READY:
-		pa_operation* op =
-			pa_context_get_sink_input_info_list(context, sink_info_cb, NULL);
-		if(op == NULL) die("PA sink input list");
+		pa_context_get_source_info_list(context, pa_source_cb, NULL);
+		pa_context_get_sink_input_info_list(context, pa_sink_input_cb, NULL);
 		break;
 
 	default:
