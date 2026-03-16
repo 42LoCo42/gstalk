@@ -1,0 +1,1 @@
+udpsrc port=%s caps="application/x-rtp, media=(string)audio, clock-rate=(int)48000, encoding-name=(string)OPUS, sprop-stereo=(string)1, encoding-params=(string)2, sprop-maxcapturerate=(string)48000, payload=(int)96" ! rtpjitterbuffer latency=100 ! rtpopusdepay ! opusdec ! audioconvert ! pulsesink client-name="gst sys out"

@@ -3,6 +3,7 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        inherit (pkgs.lib) makeSearchPath;
         inherit (pkgs.lib.fileset) toSource unions;
         stdenv = pkgs.gccStdenv; # pkgs.clangStdenv;
       in
@@ -22,10 +23,20 @@
           nativeBuildInputs = with pkgs; [
             meson
             ninja
+            pkg-config
+            wrapGAppsHook3
           ];
 
-          buildInputs = with pkgs; [
-          ];
+          buildInputs =
+            with pkgs;
+            with gst_all_1; [
+              libpulseaudio
+
+              gstreamer
+              gst-plugins-base
+              gst-plugins-good
+              glib-networking
+            ];
 
           mesonBuildType = "release";
           mesonFlags = [ "--werror" ];
@@ -35,10 +46,17 @@
           inherit stdenv;
         }) {
           inputsFrom = [ packages.default ];
+
           packages = with pkgs; [
             clang-tools
             just
           ];
+
+          env = {
+            GIO_EXTRA_MODULES = makeSearchPath "lib/gio/modules" (with pkgs; [
+              glib-networking
+            ]);
+          };
         };
       });
 }
