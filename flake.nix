@@ -48,14 +48,9 @@
 
           packages = with pkgs; [
             clang-tools
+            qpwgraph
             just
           ];
-
-          env = {
-            GIO_EXTRA_MODULES = makeSearchPath "lib/gio/modules" (with pkgs; [
-              glib-networking
-            ]);
-          };
         };
       });
 }

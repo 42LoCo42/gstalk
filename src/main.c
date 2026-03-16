@@ -32,7 +32,7 @@ const char receiver_src[] = {
 	do {                                                                       \
 		if((arr).len >= (arr).cap)                                             \
 			(arr).ptr = reallocarray(                                          \
-				(arr).ptr, (arr).cap ? ((arr).cap <<= 2) : 16,                 \
+				(arr).ptr, ((arr).cap = (arr).cap ? (arr).cap << 1 : 16),      \
 				sizeof((arr.ptr)[0])                                           \
 			);                                                                 \
                                                                                \
@@ -50,11 +50,8 @@ static AudioSources audioSources = {0};
 static pthread_barrier_t barrier = {0};
 
 static void sink_info_cb(
-	pa_context* context, const pa_sink_input_info* i, int is_last,
-	void* userdata
+	pa_context* context, const pa_sink_input_info* i, int is_last, void*
 ) {
-	(void) userdata;
-
 	if(is_last) {
 		pthread_barrier_wait(&barrier);
 		pa_context_disconnect(context);
@@ -69,19 +66,17 @@ static void sink_info_cb(
 		   &source.name, "%s: %s", pa_proplist_gets(i->proplist, "node.name"),
 		   i->name
 	   ) == 1)
-		die("asprintf failed");
+		die("asprintf audio source name");
 
 	ArrayAdd(audioSources, source);
 }
 
-static void context_cb(pa_context* context, void* userdata) {
-	(void) userdata;
-
+static void context_cb(pa_context* context, void*) {
 	switch(pa_context_get_state(context)) {
 	case PA_CONTEXT_READY:
 		pa_operation* op =
 			pa_context_get_sink_input_info_list(context, sink_info_cb, NULL);
-		if(op == NULL) die("get sink input list failed");
+		if(op == NULL) die("PA sink input list");
 		break;
 
 	default:
@@ -90,32 +85,47 @@ static void context_cb(pa_context* context, void* userdata) {
 
 static void* pulse_fuckery(void*) {
 	pa_mainloop* mainloop = pa_mainloop_new();
-	if(mainloop == NULL) die("mainloop failed");
+	if(mainloop == NULL) die("PA mainloop");
 
 	pa_mainloop_api* mainloop_api = pa_mainloop_get_api(mainloop);
-	if(mainloop_api == NULL) die("mainloop_api failed");
+	if(mainloop_api == NULL) die("PA mainloop API");
 
 	pa_context* context = pa_context_new(mainloop_api, NULL);
-	if(context == NULL) die("context failed");
+	if(context == NULL) die("PA context");
 
 	pa_context_set_state_callback(context, context_cb, NULL);
 	if(pa_context_connect(context, NULL, 0, NULL) < 0)
-		die("context connect failed");
+		die("PA context connect");
 
 	int ret = 0;
-	if(pa_mainloop_run(mainloop, &ret) < 0) die("mainloop run failed");
+	if(pa_mainloop_run(mainloop, &ret) < 0) die("PA mainloop run");
 
 	return NULL;
 }
 
-void _usage(const char* app) {
+static void print_audio_sources(void) {
+	if(pthread_barrier_init(&barrier, NULL, 2) < 0) die("thread barrier");
+
+	pthread_t pa_thread = {0};
+	if(pthread_create(&pa_thread, NULL, pulse_fuckery, NULL) != 0)
+		die("thread create");
+
+	pthread_barrier_wait(&barrier);
+
+	for(size_t i = 0; i < audioSources.len; i++) {
+		AudioSource it = audioSources.ptr[i];
+		printf("%u: %s\n", it.index, it.name);
+	}
+}
+
+[[noreturn]] static void _usage(const char* app) {
 	errx(
 		1,
 		""
 		"usage: %s mode...\n"
 		"  mode ls: lists all pulseaudio sink inputs\n"
 		"  mode rx: <port>\n"
-		"  mode tx: <dev> <host> <port>",
+		"  mode tx: <host> <port> [ID]",
 		app
 	);
 }
@@ -128,47 +138,48 @@ int main(int argc, char** argv) {
 	char* pipeline_src = NULL;
 
 	if(strcmp(argv[1], "ls") == 0) {
-		if(pthread_barrier_init(&barrier, NULL, 2) < 0)
-			die("pthread_barrier_init");
-
-		pthread_t pa_thread = {0};
-		if(pthread_create(&pa_thread, NULL, pulse_fuckery, NULL) != 0)
-			die("thread create failed");
-
-		pthread_barrier_wait(&barrier);
-
-		for(size_t i = 0; i < audioSources.len; i++) {
-			AudioSource it = audioSources.ptr[i];
-			printf("%u: %s\n", it.index, it.name);
-		}
-
+		print_audio_sources();
 		return 0;
 	} else if(strcmp(argv[1], "rx") == 0) {
 		if(argc != 3) usage();
+
 		if(asprintf(&pipeline_src, receiver_src, argv[2]) == -1)
-			die("asprintf failed");
+			die("asprintf receiver pipeline");
 	} else if(strcmp(argv[1], "tx") == 0) {
-		if(argc != 5) usage();
-		if(asprintf(
-			   &pipeline_src, transmitter_src, argv[2], argv[3], argv[4]
-		   ) == -1)
-			die("asprintf failed");
+		char* id;
+		if(argc == 4) {
+			print_audio_sources();
+			printf("ID: ");
+
+			size_t n = 0;
+			if(getline(&id, &n, stdin) == -1) die("getline ID");
+			id[strcspn(id, "\n")] = 0;
+		} else if(argc == 5) {
+			id = argv[4];
+		} else {
+			usage();
+		}
+
+		if(asprintf(&pipeline_src, transmitter_src, id, argv[2], argv[3]) == -1)
+			die("asprintf transmitter pipeline");
 	} else {
 		usage();
 	}
+
+	printf("launching pipeline: %s\n", pipeline_src);
 
 	gst_init(&argc, &argv);
 
 	GError*     error    = NULL;
 	GstElement* pipeline = gst_parse_launch(pipeline_src, &error);
-	if(pipeline == NULL) gst_die("launch failed");
+	if(pipeline == NULL) gst_die("launch pipeline");
 
 	GstStateChangeReturn ret =
 		gst_element_set_state(pipeline, GST_STATE_PLAYING);
-	if(ret == GST_STATE_CHANGE_FAILURE) die("play failed");
+	if(ret == GST_STATE_CHANGE_FAILURE) die("play pipeline");
 
 	GstBus* bus = gst_element_get_bus(pipeline);
-	if(bus == NULL) die("get bus failed");
+	if(bus == NULL) die("get pipeline bus");
 
 	GstMessage* msg = gst_bus_timed_pop_filtered(
 		bus, GST_CLOCK_TIME_NONE, GST_MESSAGE_ERROR | GST_MESSAGE_EOS
