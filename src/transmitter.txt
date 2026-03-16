@@ -1,1 +1,1 @@
-pulsesrc client-name="gst sys in" device=%s ! audioconvert ! opusenc ! rtpopuspay ! udpsink host="%s" port=%s
+pulsesrc client-name="gstalk sys tx" device=%s ! audioconvert ! opusenc ! rtpopuspay ! udpsink host="%s" port=%s
