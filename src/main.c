@@ -1,18 +1,28 @@
+#pragma once
+
+#define _POSIX_C_SOURCE 200809L
+#include <pthread.h>
+
+extern pthread_barrier_t barrier;
+
+#if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
+
+pthread_barrier_t barrier;
+
 #include "gstreamer.c"
-#include "pulseaudio.c"
+#include "pipewire.c"
 #include "util.c"
 
+#include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-static const char transmitter_src[] = {
-#embed "transmitter.txt"
-	, 0
-};
 
 static const char receiver_src[] = {
 #embed "receiver.txt"
+	, 0
+};
+
+static const char transmitter_src[] = {
+#embed "transmitter.txt"
 	, 0
 };
 
@@ -29,6 +39,8 @@ static int usage() {
 		APP_NAME
 	);
 }
+
+static void print_audio_sources(void) {};
 
 static void setup_rx(void) {
 	char* port = shift();
@@ -59,6 +71,33 @@ static void setup_tx(void) {
 int main(int argc, char** argv) {
 	store();
 
+	pthread_barrier_init(&barrier, NULL, 2);
+	launch_pipewire();
+
+	for(;;) {
+		pthread_barrier_wait(&barrier);
+
+		uint32_t max_id = 0;
+		ArrayLoop(pwNodes, {
+			if(it->id > max_id) max_id = it->id;
+		});
+
+		int pad = floor(log10(max_id)) + 1;
+
+		printf("[H[J");
+
+		ArrayLoop(pwNodes, {
+			if(!it->playing) printf("[2;3m");
+			printf("node %*u: %s", pad, it->id, it->name);
+			if(it->detail) printf(" [%s]", it->detail);
+			puts("");
+			ArrayLoop(it->ports, { printf("  port %u\n", *port); }, port);
+			printf("[m");
+		});
+	}
+
+	return 0;
+
 	const char* mode = shift();
 	if(strcmp(mode, "ls") == 0) {
 		print_audio_sources();
@@ -74,3 +113,5 @@ int main(int argc, char** argv) {
 	printf("launching pipeline: %s\n", pipeline_src);
 	launch_pipeline(pipeline_src);
 }
+
+#endif

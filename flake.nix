@@ -29,7 +29,7 @@
           buildInputs =
             with pkgs;
             with gst_all_1; [
-              libpulseaudio
+              pipewire
 
               gstreamer
               gst-plugins-base
@@ -47,6 +47,7 @@
 
           packages = with pkgs; [
             clang-tools
+            gdb
             just
             pulseaudio
             qpwgraph

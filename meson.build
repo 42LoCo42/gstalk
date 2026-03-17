@@ -4,7 +4,7 @@ project(
 	default_options: {
 		'c_std': 'c23',
 		'buildtype': 'debugoptimized',  #
-		'warning_level': '3',
+		'warning_level': '2',
 	},
 )
 
@@ -12,7 +12,7 @@ executable(
 	'gstalk',
 	'src/main.c',
 	'src/gstreamer.c',
-	'src/pulseaudio.c',
+	'src/pipewire.c',
 	'src/util.c',
 	c_args: [
 		'-Wno-empty-translation-unit',
@@ -23,7 +23,7 @@ executable(
 	],
 	dependencies: [
 		dependency('gstreamer-1.0'),
-		dependency('libpulse'),
+		dependency('libpipewire-0.3'),
 	],
 	install: true,
 )
