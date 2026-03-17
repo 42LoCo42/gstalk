@@ -3,7 +3,6 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        inherit (pkgs.lib) makeSearchPath;
         inherit (pkgs.lib.fileset) toSource unions;
         stdenv = pkgs.gccStdenv; # pkgs.clangStdenv;
       in
@@ -51,6 +50,7 @@
             just
             pulseaudio
             qpwgraph
+            valgrind
           ];
         };
       });

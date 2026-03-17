@@ -85,19 +85,20 @@ pa_sink_input_cb(pa_context*, const pa_sink_input_info* i, int is_last, void*) {
 static void context_cb(pa_context* context, void*) {
 	switch(pa_context_get_state(context)) {
 	case PA_CONTEXT_READY:
-		pa_context_get_source_info_list(context, pa_source_cb, NULL);
-		pa_context_get_sink_input_info_list(context, pa_sink_input_cb, NULL);
+		pthread_barrier_wait(&barrier);
 		break;
 
 	default:
 	}
 }
 
-static void* pulse_fuckery(void*) {
-	pa_mainloop* mainloop = pa_mainloop_new();
+static void print_audio_sources(void) {
+	if(pthread_barrier_init(&barrier, NULL, 2) < 0) die("thread barrier");
+
+	pa_threaded_mainloop* mainloop = pa_threaded_mainloop_new();
 	if(mainloop == NULL) die("PA mainloop");
 
-	pa_mainloop_api* mainloop_api = pa_mainloop_get_api(mainloop);
+	pa_mainloop_api* mainloop_api = pa_threaded_mainloop_get_api(mainloop);
 	if(mainloop_api == NULL) die("PA mainloop API");
 
 	pa_context* context = pa_context_new(mainloop_api, NULL);
@@ -107,20 +108,17 @@ static void* pulse_fuckery(void*) {
 	if(pa_context_connect(context, NULL, 0, NULL) < 0)
 		die("PA context connect");
 
-	int ret = 0;
-	if(pa_mainloop_run(mainloop, &ret) < 0) die("PA mainloop run");
-
-	return NULL;
-}
-
-static void print_audio_sources(void) {
-	if(pthread_barrier_init(&barrier, NULL, 2) < 0) die("thread barrier");
-
-	pthread_t pa_thread = {0};
-	if(pthread_create(&pa_thread, NULL, pulse_fuckery, NULL) != 0)
-		die("thread create");
-
+	if(pa_threaded_mainloop_start(mainloop) < 0) die("PA mainloop run");
 	pthread_barrier_wait(&barrier);
+
+	pa_context_get_source_info_list(context, pa_source_cb, NULL);
+	pa_context_get_sink_input_info_list(context, pa_sink_input_cb, NULL);
+	pthread_barrier_wait(&barrier);
+
+	pa_context_disconnect(context);
+	pa_context_unref(context);
+	pa_threaded_mainloop_stop(mainloop);
+	pa_threaded_mainloop_free(mainloop);
 
 	uint32_t largest_index = 0;
 	for(size_t i = 0; i < audioSources.len; i++) {
