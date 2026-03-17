@@ -33,6 +33,12 @@ extern char*  APP_NAME;
 		(arr).ptr[(arr).len++] = (x);                                          \
 	} while(0)
 
+#define ArrayLoop(arr, body)                                                   \
+	for(size_t i = 0; i < (arr).len; i++) {                                    \
+		typeof((arr).ptr[0]) it = (arr).ptr[i];                                \
+		body                                                                   \
+	}
+
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 
 int    ARGC;

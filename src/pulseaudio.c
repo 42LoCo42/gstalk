@@ -92,15 +92,13 @@ void print_audio_sources(void) {
 	pa_threaded_mainloop_free(mainloop);
 
 	uint32_t largest_index = 0;
-	for(size_t i = 0; i < audioSources.len; i++) {
-		AudioSource it = audioSources.ptr[i];
+	ArrayLoop(audioSources, {
 		if(it.index > largest_index) largest_index = it.index;
-	}
+	});
 
-	for(size_t i = 0; i < audioSources.len; i++) {
-		AudioSource it = audioSources.ptr[i];
+	ArrayLoop(audioSources, {
 		printf("%*u: %s\n", (int) log10(largest_index) + 2, it.index, it.name);
-	}
+	});
 }
 
 #endif
