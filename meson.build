@@ -11,8 +11,16 @@ project(
 executable(
 	'gstalk',
 	'src/main.c',
-	c_args: [],
-	link_args: ['-lm'],
+	'src/gstreamer.c',
+	'src/pulseaudio.c',
+	'src/util.c',
+	c_args: [
+		'-Wno-empty-translation-unit',
+		'-Wno-pragma-once-outside-header',
+	],
+	link_args: [
+		'-lm',
+	],
 	dependencies: [
 		dependency('gstreamer-1.0'),
 		dependency('libpulse'),
