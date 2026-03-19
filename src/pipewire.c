@@ -20,7 +20,8 @@ typedef struct {
 
 Array(PWNode);
 
-extern PWNodes pwNodes;
+extern uint32_t sink_id;
+extern PWNodes  pwNodes;
 
 void launch_pipewire(void);
 
@@ -28,7 +29,8 @@ void launch_pipewire(void);
 
 #include <assert.h>
 
-PWNodes pwNodes = {0};
+uint32_t sink_id = 0;
+PWNodes  pwNodes = {0};
 
 static int nodeSorter(const void* a, const void* b) {
 	return ((PWNode*) a)->id - ((PWNode*) b)->id;
@@ -63,6 +65,8 @@ static void on_registry_event(
 	void* data, uint32_t id, uint32_t, const char* type, uint32_t version,
 	const struct spa_dict* props
 ) {
+	if(id == sink_id) return;
+
 	struct pw_registry* registry = data;
 
 	const char* media_class = NULL;
@@ -130,6 +134,11 @@ static void on_registry_remove_event(void*, uint32_t id) {
 	pthread_barrier_wait(&barrier);
 }
 
+void obj_bound_id(void*, uint32_t id) {
+	sink_id = id;
+	pthread_barrier_wait(&barrier);
+}
+
 void launch_pipewire(void) {
 	pw_init(NULL, NULL);
 	struct pw_thread_loop* thread_loop = pw_thread_loop_new("pipewire", NULL);
@@ -152,7 +161,28 @@ void launch_pipewire(void) {
 		registry, &registry_listener, &registry_events, registry
 	);
 
+	struct pw_properties* sink_props = pw_properties_new(
+		PW_KEY_NODE_NAME, "gstalk",                     //
+		PW_KEY_FACTORY_NAME, "support.null-audio-sink", //
+		NULL
+	);
+
+	struct pw_proxy* sink = pw_core_create_object(
+		core, "adapter", PW_TYPE_INTERFACE_Node, PW_VERSION_CORE,
+		&sink_props->dict, 0
+	);
+
+	static struct spa_hook sink_listener = {0};
+
+	static struct pw_proxy_events sink_events = {
+		.version = PW_VERSION_PROXY_EVENTS,
+		.bound   = obj_bound_id,
+	};
+
+	pw_proxy_add_listener(sink, &sink_listener, &sink_events, NULL);
+
 	pw_thread_loop_start(thread_loop);
+	pthread_barrier_wait(&barrier);
 }
 
 #endif
