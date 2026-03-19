@@ -6,22 +6,41 @@
 
 #include <pipewire/pipewire.h>
 
-Array(uint32_t, IDs);
+typedef struct {
+	uint32_t id;
+	uint32_t ix;
+} PWPort;
+
+Array(PWPort);
 
 typedef struct {
 	uint32_t id;
 	char*    name;
 	char*    detail;
 	bool     playing;
-	IDs      ports;
+	PWPorts  ports;
 
 	struct spa_hook* listener;
 } PWNode;
 
 Array(PWNode);
 
-extern uint32_t sink_id;
-extern PWNodes  pwNodes;
+extern PWNodes pwNodes;
+
+typedef struct {
+	struct pw_thread_loop* thread_loop;
+	struct pw_loop*        loop;
+	struct pw_context*     context;
+	struct pw_core*        core;
+	struct pw_registry*    registry;
+
+	struct {
+		uint32_t id;
+		PWPorts  ports;
+	} nullSink;
+} Data;
+
+extern Data data;
 
 void launch_pipewire(void);
 
@@ -29,15 +48,24 @@ void launch_pipewire(void);
 
 #include <assert.h>
 
-uint32_t sink_id = 0;
-PWNodes  pwNodes = {0};
+#define printf(...)
+
+PWNodes pwNodes = {0};
+
+Data data = {0};
 
 static int nodeSorter(const void* a, const void* b) {
 	return ((PWNode*) a)->id - ((PWNode*) b)->id;
 }
 
+static void on_bound_id(void*, uint32_t id) {
+	data.nullSink.id = id;
+	printf("sink %u\n", id);
+}
+
 static void on_node_info(void*, const struct pw_node_info* info) {
 	ArrayFind(pwNodes, node, it->id == info->id);
+	assert(node && "received node info for unknown node!");
 
 	const char* media_name = spa_dict_lookup(info->props, PW_KEY_MEDIA_NAME);
 	if(media_name) {
@@ -62,21 +90,16 @@ static void on_node_info(void*, const struct pw_node_info* info) {
 }
 
 static void on_registry_event(
-	void* data, uint32_t id, uint32_t, const char* type, uint32_t version,
+	void*, uint32_t id, uint32_t, const char* type, uint32_t version,
 	const struct spa_dict* props
 ) {
-	if(id == sink_id) return;
-
-	struct pw_registry* registry = data;
-
 	const char* media_class = NULL;
-	int         is_app      = 0;
 
-	if(strcmp(type, PW_TYPE_INTERFACE_Node) == 0 &&
+	if(strcmp(type, PW_TYPE_INTERFACE_Node) == 0 && id != data.nullSink.id &&
 	   (media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS)) &&
 	   (strcmp(media_class, "Audio/Source") &
 	    strcmp(media_class, "Audio/Sink") &
-	    (is_app = strcmp(media_class, "Stream/Output/Audio"))) == 0) {
+	    strcmp(media_class, "Stream/Output/Audio")) == 0) {
 		ArrayFind(pwNodes, node, it->id == id);
 		assert(!node && "existing node re-added???");
 
@@ -89,6 +112,7 @@ static void on_registry_event(
 			.name     = strdup(name),
 			.listener = malloc(sizeof(*new.listener)),
 		};
+		printf("node %u\n", id);
 
 		ArrayAdd(pwNodes, new);
 		node = &ArrayLast(pwNodes);
@@ -99,23 +123,40 @@ static void on_registry_event(
 		};
 
 		struct pw_node* nodeRef =
-			pw_registry_bind(registry, id, type, version, 0);
+			pw_registry_bind(data.registry, id, type, version, 0);
 		pw_node_add_listener(nodeRef, node->listener, &node_events, NULL);
 
 		qsort(pwNodes.ptr, pwNodes.len, sizeof(pwNodes.ptr[0]), nodeSorter);
-
 	} else if(strcmp(type, PW_TYPE_INTERFACE_Port) == 0) {
-		const char* direction = spa_dict_lookup(props, PW_KEY_PORT_DIRECTION);
-		assert(direction && "port must have a direction!");
-		if(strcmp(direction, "out") != 0) return;
-
 		const char* node_id_str = spa_dict_lookup(props, PW_KEY_NODE_ID);
 		assert(node_id_str && "port must have a node ID!");
 
 		uint32_t node_id = atoi(node_id_str);
-		ArrayFind(pwNodes, node, it->id == node_id);
-		if(node) { ArrayAdd(node->ports, id); }
+
+		const char* direction = spa_dict_lookup(props, PW_KEY_PORT_DIRECTION);
+		assert(direction && "port must have a direction!");
+
+		const char* port_id = spa_dict_lookup(props, PW_KEY_PORT_ID);
+		assert(port_id && "port must have a port.id!");
+
+		PWPort port = {
+			.id = id,
+			.ix = atoi(port_id),
+		};
+
+		if(node_id == data.nullSink.id && strcmp(direction, "in") == 0) {
+			ArrayAdd(data.nullSink.ports, port);
+			printf("port sink %u.%u\n", port.id, port.ix);
+		} else if(strcmp(direction, "out") == 0) {
+			ArrayFind(pwNodes, node, it->id == node_id);
+			if(node) {
+				ArrayAdd(node->ports, port);
+				printf("port node %u.%u\n", port.id, port.ix);
+			}
+		}
 	}
+
+	pthread_barrier_wait(&barrier);
 }
 
 static void on_registry_remove_event(void*, uint32_t id) {
@@ -134,20 +175,38 @@ static void on_registry_remove_event(void*, uint32_t id) {
 	pthread_barrier_wait(&barrier);
 }
 
-void obj_bound_id(void*, uint32_t id) {
-	sink_id = id;
-	pthread_barrier_wait(&barrier);
-}
-
 void launch_pipewire(void) {
 	pw_init(NULL, NULL);
-	struct pw_thread_loop* thread_loop = pw_thread_loop_new("pipewire", NULL);
-	struct pw_loop*        loop        = pw_thread_loop_get_loop(thread_loop);
-	struct pw_context*     context     = pw_context_new(loop, NULL, 0);
-	struct pw_core*        core        = pw_context_connect(context, NULL, 0);
+	data.thread_loop = pw_thread_loop_new("pipewire", NULL);
+	data.loop        = pw_thread_loop_get_loop(data.thread_loop);
+	data.context     = pw_context_new(data.loop, NULL, 0);
+	data.core        = pw_context_connect(data.context, NULL, 0);
 
-	struct pw_registry* registry =
-		pw_core_get_registry(core, PW_VERSION_REGISTRY, 0);
+	////////// setup null sink //////////
+
+	struct pw_properties* sink_props = pw_properties_new(
+		PW_KEY_NODE_NAME, "gstalk",                     //
+		PW_KEY_FACTORY_NAME, "support.null-audio-sink", //
+		NULL
+	);
+
+	struct pw_proxy* sink = pw_core_create_object(
+		data.core, "adapter", PW_TYPE_INTERFACE_Node, PW_VERSION_NODE,
+		&sink_props->dict, 0
+	);
+
+	static struct spa_hook sink_listener = {0};
+
+	static struct pw_proxy_events sink_events = {
+		.version = PW_VERSION_PROXY_EVENTS,
+		.bound   = on_bound_id,
+	};
+
+	pw_proxy_add_listener(sink, &sink_listener, &sink_events, NULL);
+
+	////////// setup registry listener //////////
+
+	data.registry = pw_core_get_registry(data.core, PW_VERSION_REGISTRY, 0);
 
 	static struct spa_hook registry_listener = {0};
 
@@ -158,31 +217,10 @@ void launch_pipewire(void) {
 	};
 
 	pw_registry_add_listener(
-		registry, &registry_listener, &registry_events, registry
+		data.registry, &registry_listener, &registry_events, NULL
 	);
 
-	struct pw_properties* sink_props = pw_properties_new(
-		PW_KEY_NODE_NAME, "gstalk",                     //
-		PW_KEY_FACTORY_NAME, "support.null-audio-sink", //
-		NULL
-	);
-
-	struct pw_proxy* sink = pw_core_create_object(
-		core, "adapter", PW_TYPE_INTERFACE_Node, PW_VERSION_CORE,
-		&sink_props->dict, 0
-	);
-
-	static struct spa_hook sink_listener = {0};
-
-	static struct pw_proxy_events sink_events = {
-		.version = PW_VERSION_PROXY_EVENTS,
-		.bound   = obj_bound_id,
-	};
-
-	pw_proxy_add_listener(sink, &sink_listener, &sink_events, NULL);
-
-	pw_thread_loop_start(thread_loop);
-	pthread_barrier_wait(&barrier);
+	pw_thread_loop_start(data.thread_loop);
 }
 
 #endif

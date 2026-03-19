@@ -77,6 +77,15 @@ int main(int argc, char** argv) {
 	for(;;) {
 		pthread_barrier_wait(&barrier);
 
+		printf("[H[J");
+
+		printf("sink %u\n", data.nullSink.id);
+		ArrayLoop(data.nullSink.ports, {
+			printf("  port %u.%u\n", it->id, it->ix);
+		});
+
+		puts("==============================");
+
 		uint32_t max_id = 0;
 		ArrayLoop(pwNodes, {
 			if(it->id > max_id) max_id = it->id;
@@ -84,14 +93,17 @@ int main(int argc, char** argv) {
 
 		int pad = floor(log10(max_id)) + 1;
 
-		printf("[H[J");
-
 		ArrayLoop(pwNodes, {
 			if(!it->playing) printf("[2;3m");
 			printf("node %*u: %s", pad, it->id, it->name);
 			if(it->detail) printf(" [%s]", it->detail);
 			puts("");
-			ArrayLoop(it->ports, { printf("  port %u\n", *port); }, port);
+
+			ArrayLoop(
+				it->ports, { printf("  port %u.%u\n", port->id, port->ix); },
+				port
+			);
+
 			printf("[m");
 		});
 	}
