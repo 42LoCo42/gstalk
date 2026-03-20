@@ -12,6 +12,8 @@ executable(
 	'gstalk',
 	'src/main.c',
 	'src/gstreamer.c',
+	'src/input.c',
+	'src/menu.c',
 	'src/pipewire.c',
 	'src/util.c',
 	c_args: [
@@ -24,6 +26,7 @@ executable(
 	dependencies: [
 		dependency('gstreamer-1.0'),
 		dependency('libpipewire-0.3'),
+		dependency('notcurses'),
 	],
 	install: true,
 )

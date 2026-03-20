@@ -1,14 +1,29 @@
 #pragma once
 
-void launch_pipeline(const char* pipeline_src);
+void launch_gstreamer(
+	const char* rx_port, const char* tx_host, const char* tx_port
+);
 
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 
 #include "util.c"
 
 #include <gst/gst.h>
+#include <stdio.h>
 
-void launch_pipeline(const char* pipeline_src) {
+static const char receiver_src[] = {
+#embed "receiver.txt"
+	, 0
+};
+
+static const char transmitter_src[] = {
+#embed "transmitter.txt"
+	, 0
+};
+
+static void* pipeline_fn(void* data) {
+	const char* pipeline_src = data;
+
 	gst_init(NULL, NULL);
 
 	GError*     error    = NULL;
@@ -51,6 +66,22 @@ void launch_pipeline(const char* pipeline_src) {
 			break;
 		}
 	}
+
+	return NULL;
+}
+
+void launch_gstreamer(
+	const char* rx_port, const char* tx_host, const char* tx_port
+) {
+	char buf[8192] = {0};
+
+	pthread_t rx_thread = {0};
+	snprintf(buf, sizeof(buf), receiver_src, rx_port);
+	pthread_create(&rx_thread, NULL, pipeline_fn, strdup(buf));
+
+	pthread_t tx_thread = {0};
+	snprintf(buf, sizeof(buf), transmitter_src, tx_host, tx_port);
+	pthread_create(&tx_thread, NULL, pipeline_fn, strdup(buf));
 }
 
 #endif

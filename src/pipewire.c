@@ -1,10 +1,9 @@
 #pragma once
 
 #define _DEFAULT_SOURCE
-#include "main.c"
 #include "util.c"
 
-#include <pipewire/pipewire.h>
+#include <stdint.h>
 
 typedef struct {
 	uint32_t id;
@@ -60,7 +59,12 @@ void unLink(PWNode* node);
 
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 
+#include "menu.c"
+
 #include <assert.h>
+#include <pipewire/pipewire.h>
+
+#define printf(...)
 
 pthread_barrier_t nullSinkBarrier = {0};
 

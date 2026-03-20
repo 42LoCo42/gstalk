@@ -12,6 +12,8 @@ extern char*  APP_NAME;
 
 #define die(...) err(1, __VA_ARGS__)
 
+#define mod(x, b) ((((x) % (b)) + (b)) % (b))
+
 #define ArrayN(t, n)                                                           \
 	typedef struct {                                                           \
 		t*     ptr;                                                            \

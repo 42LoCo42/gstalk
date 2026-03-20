@@ -29,6 +29,7 @@
           buildInputs =
             with pkgs;
             with gst_all_1; [
+              notcurses
               pipewire
 
               gstreamer

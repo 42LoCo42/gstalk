@@ -1,1 +1,1 @@
-pulsesrc client-name="gstalk" device="gstalk.monitor" ! audioconvert ! opusenc ! rtpopuspay ! udpsink host="%s" port=%s
+pulsesrc client-name="gstalk tx" device="gstalk.monitor" ! audioconvert ! opusenc ! rtpopuspay ! rtpjitterbuffer latency=100 ! udpsink host="%s" port=%s
