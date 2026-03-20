@@ -12,12 +12,7 @@ typedef struct {
 
 Array(PWPort);
 
-typedef struct {
-	struct pw_proxy* proxy;
-	/* struct spa_hook* listener; */
-} PWLink;
-
-Array(PWLink);
+ArrayN(struct pw_proxy*, PWLinks);
 
 typedef enum {
 	NT_INVALID,
@@ -74,7 +69,7 @@ void unLink(PWNode* node);
 #include <assert.h>
 #include <pipewire/pipewire.h>
 
-#define printf(...)
+bool launched = false;
 
 pthread_barrier_t nullSinkBarrier = {0};
 
@@ -83,8 +78,6 @@ Data    data    = {0};
 
 const char* ShowNodeClass(NodeClass type) {
 	switch(type) {
-	case NT_INVALID:
-		assert(false && "invalid node class!");
 	case NT_SOURCE:
 		return "src";
 	case NT_SINK:
@@ -92,6 +85,9 @@ const char* ShowNodeClass(NodeClass type) {
 	case NT_APP:
 		return "app";
 		break;
+
+	default:
+		assert(false && "invalid node class!");
 	}
 }
 
@@ -163,6 +159,7 @@ static void on_registry_event(
 			.name     = strdup(name),
 			.listener = malloc(sizeof(*new.listener)),
 		};
+
 		printf("node %u\n", id);
 
 		ArrayAdd(pwNodes, new);
@@ -203,6 +200,7 @@ static void on_registry_event(
 			ArrayFind(pwNodes, node, it->id == node_id);
 			if(node) {
 				ArrayAdd(node->ports, port);
+				if(launched && autoadd && node->ports.len == 2) mkLink(node);
 				printf("port node %u.%u for %u\n", port.id, port.ix, node_id);
 			}
 		}
@@ -280,6 +278,9 @@ void launch_pipewire(void) {
 	for(size_t i = 0; i < 2; i++) {
 		pthread_barrier_wait(&nullSinkBarrier);
 	}
+
+	launched = true;
+	puts("launched!");
 }
 
 void mkLink(PWNode* node) {
@@ -289,18 +290,16 @@ void mkLink(PWNode* node) {
 		ArrayFind(data.nullSink.ports, dst, it->ix == src->ix);
 		assert(dst && "sink must have a matching port");
 
-		PWLink link = {0};
-
 		struct pw_properties* props = pw_properties_new_string("");
 		pw_properties_setf(props, PW_KEY_LINK_OUTPUT_PORT, "%u", src->id);
 		pw_properties_setf(props, PW_KEY_LINK_INPUT_PORT, "%u", dst->id);
 
-		link.proxy = pw_core_create_object(
+		struct pw_proxy* link = pw_core_create_object(
 			data.core, "link-factory", PW_TYPE_INTERFACE_Link, PW_VERSION_LINK,
 			&props->dict, 0
 		);
 
-		pw_properties_clear(props);
+		pw_properties_free(props);
 		ArrayAdd(node->links, link);
 	});
 
@@ -310,7 +309,7 @@ void mkLink(PWNode* node) {
 void unLink(PWNode* node) {
 	pw_thread_loop_lock(data.thread_loop);
 
-	ArrayLoop(node->links, { pw_core_destroy(data.core, it->proxy); });
+	ArrayLoop(node->links, { pw_core_destroy(data.core, *it); });
 	ArrayFree(node->links);
 
 	pw_thread_loop_unlock(data.thread_loop);

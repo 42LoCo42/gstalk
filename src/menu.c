@@ -20,7 +20,7 @@ extern pthread_cond_t redisplay;
 #include <math.h>
 #include <stdio.h>
 
-bool    autoadd = true;
+bool    autoadd;
 bool    muted;
 ssize_t selected;
 
