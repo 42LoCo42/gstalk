@@ -19,11 +19,21 @@ typedef struct {
 
 Array(PWLink);
 
+typedef enum {
+	NT_INVALID,
+	NT_SOURCE,
+	NT_SINK,
+	NT_APP,
+} NodeClass;
+
+const char* ShowNodeClass(NodeClass type);
+
 typedef struct {
 	uint32_t id;
-	char*    name;
-	char*    detail;
-	bool     playing;
+	NodeClass class;
+	char* name;
+	char* detail;
+	bool  playing;
 
 	PWPorts ports;
 	PWLinks links;
@@ -71,6 +81,20 @@ pthread_barrier_t nullSinkBarrier = {0};
 PWNodes pwNodes = {0};
 Data    data    = {0};
 
+const char* ShowNodeClass(NodeClass type) {
+	switch(type) {
+	case NT_INVALID:
+		assert(false && "invalid node class!");
+	case NT_SOURCE:
+		return "src";
+	case NT_SINK:
+		return "snk";
+	case NT_APP:
+		return "app";
+		break;
+	}
+}
+
 static int nodeSorter(const void* a, const void* b) {
 	return ((PWNode*) a)->id - ((PWNode*) b)->id;
 }
@@ -113,10 +137,19 @@ static void on_registry_event(
 	const char* media_class = NULL;
 
 	if(strcmp(type, PW_TYPE_INTERFACE_Node) == 0 && id != data.nullSink.id &&
-	   (media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS)) &&
-	   (strcmp(media_class, "Audio/Source") &
-	    strcmp(media_class, "Audio/Sink") &
-	    strcmp(media_class, "Stream/Output/Audio")) == 0) {
+	   (media_class = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS))) {
+		NodeClass class = NT_INVALID;
+
+		if(strcmp(media_class, "Audio/Source") == 0) {
+			class = NT_SOURCE;
+		} else if(strcmp(media_class, "Audio/Sink") == 0) {
+			class = NT_SINK;
+		} else if(strcmp(media_class, "Stream/Output/Audio") == 0) {
+			class = NT_APP;
+		}
+
+		if(class == NT_INVALID) return;
+
 		ArrayFind(pwNodes, node, it->id == id);
 		assert(!node && "existing node re-added???");
 
@@ -126,6 +159,7 @@ static void on_registry_event(
 
 		PWNode new = {
 			.id       = id,
+			.class    = class,
 			.name     = strdup(name),
 			.listener = malloc(sizeof(*new.listener)),
 		};

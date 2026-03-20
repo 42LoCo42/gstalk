@@ -49,6 +49,7 @@ void launch_input(void) {
 				running = false;
 				break;
 
+			case ' ':
 			case '\n':
 				PWNode* node = &pwNodes.ptr[selected];
 				if(node->links.len == 0) {
