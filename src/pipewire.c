@@ -14,11 +14,20 @@ typedef struct {
 Array(PWPort);
 
 typedef struct {
+	struct pw_proxy* proxy;
+	/* struct spa_hook* listener; */
+} PWLink;
+
+Array(PWLink);
+
+typedef struct {
 	uint32_t id;
 	char*    name;
 	char*    detail;
 	bool     playing;
-	PWPorts  ports;
+
+	PWPorts ports;
+	PWLinks links;
 
 	struct spa_hook* listener;
 } PWNode;
@@ -38,21 +47,25 @@ typedef struct {
 		uint32_t id;
 		PWPorts  ports;
 	} nullSink;
+
+	int seq;
 } Data;
 
 extern Data data;
 
 void launch_pipewire(void);
 
+void mkLink(PWNode* node);
+void unLink(PWNode* node);
+
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 
 #include <assert.h>
 
-#define printf(...)
+pthread_barrier_t nullSinkBarrier = {0};
 
 PWNodes pwNodes = {0};
-
-Data data = {0};
+Data    data    = {0};
 
 static int nodeSorter(const void* a, const void* b) {
 	return ((PWNode*) a)->id - ((PWNode*) b)->id;
@@ -86,7 +99,7 @@ static void on_node_info(void*, const struct pw_node_info* info) {
 		break;
 	}
 
-	pthread_barrier_wait(&barrier);
+	pthread_cond_signal(&redisplay);
 }
 
 static void on_registry_event(
@@ -146,17 +159,18 @@ static void on_registry_event(
 
 		if(node_id == data.nullSink.id && strcmp(direction, "in") == 0) {
 			ArrayAdd(data.nullSink.ports, port);
-			printf("port sink %u.%u\n", port.id, port.ix);
+			printf("port sink %u.%u for %u\n", port.id, port.ix, node_id);
+			pthread_barrier_wait(&nullSinkBarrier);
 		} else if(strcmp(direction, "out") == 0) {
 			ArrayFind(pwNodes, node, it->id == node_id);
 			if(node) {
 				ArrayAdd(node->ports, port);
-				printf("port node %u.%u\n", port.id, port.ix);
+				printf("port node %u.%u for %u\n", port.id, port.ix, node_id);
 			}
 		}
 	}
 
-	pthread_barrier_wait(&barrier);
+	pthread_cond_signal(&redisplay);
 }
 
 static void on_registry_remove_event(void*, uint32_t id) {
@@ -172,10 +186,12 @@ static void on_registry_remove_event(void*, uint32_t id) {
 		}
 	});
 
-	pthread_barrier_wait(&barrier);
+	pthread_cond_signal(&redisplay);
 }
 
 void launch_pipewire(void) {
+	pthread_barrier_init(&nullSinkBarrier, NULL, 2);
+
 	pw_init(NULL, NULL);
 	data.thread_loop = pw_thread_loop_new("pipewire", NULL);
 	data.loop        = pw_thread_loop_get_loop(data.thread_loop);
@@ -186,6 +202,7 @@ void launch_pipewire(void) {
 
 	struct pw_properties* sink_props = pw_properties_new(
 		PW_KEY_NODE_NAME, "gstalk",                     //
+		PW_KEY_NODE_DESCRIPTION, "gstalk",              //
 		PW_KEY_FACTORY_NAME, "support.null-audio-sink", //
 		NULL
 	);
@@ -221,6 +238,44 @@ void launch_pipewire(void) {
 	);
 
 	pw_thread_loop_start(data.thread_loop);
+
+	for(size_t i = 0; i < 2; i++) {
+		pthread_barrier_wait(&nullSinkBarrier);
+	}
+}
+
+void mkLink(PWNode* node) {
+	pw_thread_loop_lock(data.thread_loop);
+
+	ArrayLoopN(node->ports, src, {
+		ArrayFind(data.nullSink.ports, dst, it->ix == src->ix);
+		assert(dst && "sink must have a matching port");
+
+		PWLink link = {0};
+
+		struct pw_properties* props = pw_properties_new_string("");
+		pw_properties_setf(props, PW_KEY_LINK_OUTPUT_PORT, "%u", src->id);
+		pw_properties_setf(props, PW_KEY_LINK_INPUT_PORT, "%u", dst->id);
+
+		link.proxy = pw_core_create_object(
+			data.core, "link-factory", PW_TYPE_INTERFACE_Link, PW_VERSION_LINK,
+			&props->dict, 0
+		);
+
+		pw_properties_clear(props);
+		ArrayAdd(node->links, link);
+	});
+
+	pw_thread_loop_unlock(data.thread_loop);
+}
+
+void unLink(PWNode* node) {
+	pw_thread_loop_lock(data.thread_loop);
+
+	ArrayLoop(node->links, { pw_core_destroy(data.core, it->proxy); });
+	ArrayFree(node->links);
+
+	pw_thread_loop_unlock(data.thread_loop);
 }
 
 #endif

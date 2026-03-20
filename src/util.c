@@ -12,16 +12,14 @@ extern char*  APP_NAME;
 
 #define die(...) err(1, __VA_ARGS__)
 
-#define IF_TEST(...) __VA_ARGS__
-#define IF_TEST1(...)
-#define IF(COND, ...) IF_TEST##COND(__VA_ARGS__)
-
-#define Array(t, ...)                                                          \
+#define ArrayN(t, n)                                                           \
 	typedef struct {                                                           \
 		t*     ptr;                                                            \
 		size_t len;                                                            \
 		size_t cap;                                                            \
-	} IF(__VA_OPT__(1), t##s) __VA_ARGS__
+	} n
+
+#define Array(t) ArrayN(t, t##s)
 
 #define ArrayAdd(arr, x)                                                       \
 	do {                                                                       \
@@ -34,23 +32,33 @@ extern char*  APP_NAME;
 		(arr).ptr[(arr).len++] = (x);                                          \
 	} while(0)
 
-#define ArrayLoop(arr, body, ...)                                              \
+#define ArrayLoop(arr, body) ArrayLoopN(arr, it, body)
+
+#define ArrayLoopN(arr, it, body)                                              \
 	for(size_t i = 0; i < (arr).len; i++) {                                    \
-		typeof((arr).ptr[0])* IF(__VA_OPT__(1), it) __VA_ARGS__ =              \
-			&(arr).ptr[i];                                                     \
+		typeof((arr).ptr[0])* it = &(arr).ptr[i];                              \
 		body                                                                   \
 	}
 
-#define ArrayFind(arr, result, pred)                                           \
+#define ArrayFindN(arr, result, it, pred)                                      \
 	typeof((arr).ptr[0])* result = NULL;                                       \
-	ArrayLoop(arr, {                                                           \
+	ArrayLoopN(arr, it, {                                                      \
 		if(pred) {                                                             \
 			result = it;                                                       \
 			break;                                                             \
 		}                                                                      \
 	})
 
+#define ArrayFind(arr, result, pred) ArrayFindN(arr, result, it, pred)
+
 #define ArrayLast(arr) (arr).ptr[(arr).len - 1]
+
+#define ArrayFree(arr)                                                         \
+	do {                                                                       \
+		free((arr).ptr);                                                       \
+		(arr).ptr = NULL;                                                      \
+		(arr).len = (arr).cap = 0;                                             \
+	} while(0)
 
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 

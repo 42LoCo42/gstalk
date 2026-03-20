@@ -3,11 +3,12 @@
 #define _POSIX_C_SOURCE 200809L
 #include <pthread.h>
 
-extern pthread_barrier_t barrier;
+extern pthread_cond_t redisplay;
 
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 
-pthread_barrier_t barrier;
+pthread_mutex_t mutex     = {0};
+pthread_cond_t  redisplay = {0};
 
 #include "gstreamer.c"
 #include "pipewire.c"
@@ -50,41 +51,18 @@ static void setup_rx(void) {
 static void setup_tx(void) {
 	char* host = shift();
 	char* port = shift();
-	char* id   = NULL;
-
-	if(ARGC > 0) {
-		id = shift();
-	} else {
-		print_audio_sources();
-		printf("ID: ");
-
-		size_t n = 0;
-		if(getline(&id, &n, stdin) == -1) exit(0);
-		id[strcspn(id, "\n")] = 0;
-	}
-
-	snprintf(
-		pipeline_src, sizeof(pipeline_src), transmitter_src, id, host, port
-	);
+	snprintf(pipeline_src, sizeof(pipeline_src), transmitter_src, host, port);
 }
 
 int main(int argc, char** argv) {
 	store();
 
-	pthread_barrier_init(&barrier, NULL, 2);
+	pthread_mutex_init(&mutex, NULL);
+	pthread_cond_init(&redisplay, NULL);
 	launch_pipewire();
 
 	for(;;) {
-		pthread_barrier_wait(&barrier);
-
 		printf("[H[J");
-
-		printf("sink %u\n", data.nullSink.id);
-		ArrayLoop(data.nullSink.ports, {
-			printf("  port %u.%u\n", it->id, it->ix);
-		});
-
-		puts("==============================");
 
 		uint32_t max_id = 0;
 		ArrayLoop(pwNodes, {
@@ -99,13 +77,14 @@ int main(int argc, char** argv) {
 			if(it->detail) printf(" [%s]", it->detail);
 			puts("");
 
-			ArrayLoop(
-				it->ports, { printf("  port %u.%u\n", port->id, port->ix); },
-				port
-			);
+			ArrayLoopN(it->ports, port, {
+				printf("  port %u.%u\n", port->id, port->ix);
+			});
 
 			printf("[m");
 		});
+
+		pthread_cond_wait(&redisplay, &mutex);
 	}
 
 	return 0;
