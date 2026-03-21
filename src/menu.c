@@ -41,8 +41,8 @@ static void* menu_fn(void*) {
 			if(i == (size_t) selected) printf("[7m");
 
 			printf(
-				"[%s] node %u (%s): %s", it->links.len > 0 ? "x" : " ", it->id,
-				ShowNodeClass(it->class), it->name
+				"[%s] node %u: %s", it->links.len > 0 ? "x" : " ", it->id,
+				it->name
 			);
 
 			if(it->detail) printf(" [%s]", it->detail);
