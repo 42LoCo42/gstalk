@@ -153,6 +153,8 @@ static void on_registry_event(
 		if(!name) name = spa_dict_lookup(props, PW_KEY_NODE_NAME);
 		assert(name && "node must have a name!");
 
+		if(strstr(name, "gstalk") != NULL) return;
+
 		PWNode new = {
 			.id       = id,
 			.class    = class,
