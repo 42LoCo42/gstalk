@@ -1,15 +1,15 @@
 * gstalk
 ** prerequisites
-- both transmitter & receiver need pulseaudio or pipewire-pulse
+- both transmitter & receiver need pipewire
 - ensure direct UDP connectivity (because STUN/TURN is a fuck™, just use tailscale or smth)
 
-** receiver
-- run =gstalk rx <port>= to listen on that UDP port
+** run
+=gstalk <rx port> <tx host> <tx port>=
+where =rx port= is a UDP port on which you wanna receive audio,
+=tx host= and =tx port= is the peer you wanna send audio to
 
-** transmitter
-- run =gstalk ls= to list all pulseaudio audio sources
-  (incl. individual sink inputs)
-- grab the ID of the thing you wanna stream
-- run =gstalk tx <receiver host> <receiver port> <ID>=
-- or if you don't provide an ID, all audio sources will be printed
-  and you will be asked for the ID
+then, pick nodes you wanna record using arrow up/down & toggle recording
+with space or enter. enable autoadd by pressing a, this will automatically
+record new audio sources as they pop up.
+
+muting is not supported yet :3
