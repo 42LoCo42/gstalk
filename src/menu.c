@@ -17,7 +17,6 @@ extern pthread_cond_t redisplay;
 #include "pipewire.c"
 #include "util.c"
 
-#include <math.h>
 #include <stdio.h>
 
 bool    autoadd;
@@ -37,20 +36,13 @@ static void* menu_fn(void*) {
 
 		puts("\n========================================\n");
 
-		uint32_t max_id = 0;
-		ArrayLoop(pwNodes, {
-			if(it->id > max_id) max_id = it->id;
-		});
-
-		int pad = floor(log10(max_id)) + 1;
-
 		ArrayLoop(pwNodes, {
 			if(!it->playing) printf("[2;3m");
 			if(i == (size_t) selected) printf("[7m");
 
 			printf(
-				"[%s] node %*u (%s): %s", it->links.len > 0 ? "x" : " ", pad,
-				it->id, ShowNodeClass(it->class), it->name
+				"[%s] node %u (%s): %s", it->links.len > 0 ? "x" : " ", it->id,
+				ShowNodeClass(it->class), it->name
 			);
 
 			if(it->detail) printf(" [%s]", it->detail);

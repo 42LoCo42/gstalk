@@ -20,9 +20,6 @@ executable(
 		'-Wno-empty-translation-unit',
 		'-Wno-pragma-once-outside-header',
 	],
-	link_args: [
-		'-lm',
-	],
 	dependencies: [
 		dependency('gstreamer-1.0'),
 		dependency('libpipewire-0.3'),
