@@ -23,7 +23,6 @@ executable(
 	dependencies: [
 		dependency('gstreamer-1.0'),
 		dependency('libpipewire-0.3'),
-		dependency('notcurses'),
 	],
 	install: true,
 )
