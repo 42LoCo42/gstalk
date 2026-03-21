@@ -127,7 +127,12 @@ static void on_registry_event(
 			.listener = malloc(sizeof(*new.listener)),
 		};
 
-		asprintf(&new.name, "%s%s", monitor == 0 ? "Monitor of " : "", name);
+		assert(
+			asprintf(
+				&new.name, "%s%s", monitor == 0 ? "Monitor of " : "", name
+			) != -1 &&
+			"buy more RAM"
+		);
 
 		printf("node %u\n", id);
 
