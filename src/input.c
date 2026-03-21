@@ -4,6 +4,7 @@ void launch_input(void);
 
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 
+#include "gstreamer.c"
 #include "menu.c"
 #include "pipewire.c"
 #include "util.c"
@@ -42,8 +43,11 @@ void launch_input(void) {
 			case 'a':
 				autoadd ^= 1;
 				break;
+			case 'd':
+				toggleDeaf(deaf ^= 1);
+				break;
 			case 'm':
-				muted ^= 1;
+				toggleMute(mute ^= 1);
 				break;
 			case 'q':
 				running = false;

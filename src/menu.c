@@ -6,7 +6,8 @@
 void launch_menu(void);
 
 extern bool    autoadd;
-extern bool    muted;
+extern bool    deaf;
+extern bool    mute;
 extern ssize_t selected;
 
 extern pthread_cond_t redisplay;
@@ -20,7 +21,8 @@ extern pthread_cond_t redisplay;
 #include <stdio.h>
 
 bool    autoadd;
-bool    muted;
+bool    deaf;
+bool    mute;
 ssize_t selected;
 
 pthread_cond_t redisplay;
@@ -32,7 +34,8 @@ static void* menu_fn(void*) {
 	for(;;) {
 		printf("[H[J");
 		printf("(a) autoadd: %s[m\n", autoadd ? "[1;32myes" : "[1;31mno");
-		printf("(m) muted:   %s[m\n", muted ? "[1;32myes" : "[1;31mno");
+		printf("(d) deaf:    %s[m\n", deaf ? "[1;32myes" : "[1;31mno");
+		printf("(m) mute:    %s[m\n", mute ? "[1;32myes" : "[1;31mno");
 
 		puts("\n========================================\n");
 

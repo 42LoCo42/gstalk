@@ -4,8 +4,12 @@ void launch_gstreamer(
 	const char* rx_port, const char* tx_host, const char* tx_port
 );
 
+void toggleMute(bool mute);
+void toggleDeaf(bool deaf);
+
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 
+#define _POSIX_C_SOURCE 200112L
 #include "util.c"
 
 #include <gst/gst.h>
@@ -21,21 +25,28 @@ static const char transmitter_src[] = {
 	, 0
 };
 
-static void* pipeline_fn(void* data) {
-	const char* pipeline_src = data;
+static GstElement* rx_pipeline = NULL;
+static GstElement* tx_pipeline = NULL;
 
+static char         buf[8192];
+static GstElement** tgt = NULL;
+
+static pthread_barrier_t barrier = {0};
+
+static void* pipeline_fn(void*) {
 	gst_init(NULL, NULL);
 
-	GError*     error    = NULL;
-	GstElement* pipeline = gst_parse_launch(pipeline_src, &error);
-	if(pipeline == NULL) errx(1, "launch failed: %s", error->message);
+	GError* error = NULL;
+	*tgt          = gst_parse_launch(buf, &error);
+	if(*tgt == NULL) errx(1, "launch failed: %s", error->message);
 
-	GstStateChangeReturn ret =
-		gst_element_set_state(pipeline, GST_STATE_PLAYING);
+	GstStateChangeReturn ret = gst_element_set_state(*tgt, GST_STATE_PLAYING);
 	if(ret == GST_STATE_CHANGE_FAILURE) die("play pipeline");
 
-	GstBus* bus = gst_element_get_bus(pipeline);
+	GstBus* bus = gst_element_get_bus(*tgt);
 	if(bus == NULL) die("get pipeline bus");
+
+	pthread_barrier_wait(&barrier);
 
 	GstMessage* msg = gst_bus_timed_pop_filtered(
 		bus, GST_CLOCK_TIME_NONE, GST_MESSAGE_ERROR | GST_MESSAGE_EOS
@@ -73,15 +84,35 @@ static void* pipeline_fn(void* data) {
 void launch_gstreamer(
 	const char* rx_port, const char* tx_host, const char* tx_port
 ) {
-	char buf[8192] = {0};
+	pthread_barrier_init(&barrier, NULL, 2);
 
 	pthread_t rx_thread = {0};
 	snprintf(buf, sizeof(buf), receiver_src, rx_port);
-	pthread_create(&rx_thread, NULL, pipeline_fn, strdup(buf));
+	tgt = &rx_pipeline;
+	pthread_create(&rx_thread, NULL, pipeline_fn, NULL);
+	pthread_barrier_wait(&barrier);
 
 	pthread_t tx_thread = {0};
 	snprintf(buf, sizeof(buf), transmitter_src, tx_host, tx_port);
-	pthread_create(&tx_thread, NULL, pipeline_fn, strdup(buf));
+	tgt = &tx_pipeline;
+	pthread_create(&tx_thread, NULL, pipeline_fn, NULL);
+	pthread_barrier_wait(&barrier);
+}
+
+void toggleMute(bool mute) {
+	GstStateChangeReturn ret = gst_element_set_state(
+		tx_pipeline, mute ? GST_STATE_PAUSED : GST_STATE_PLAYING
+	);
+
+	if(ret == GST_STATE_CHANGE_FAILURE) die("toggle mute");
+}
+
+void toggleDeaf(bool deaf) {
+	GstStateChangeReturn ret = gst_element_set_state(
+		rx_pipeline, deaf ? GST_STATE_PAUSED : GST_STATE_PLAYING
+	);
+
+	if(ret == GST_STATE_CHANGE_FAILURE) die("toggle mute");
 }
 
 #endif
