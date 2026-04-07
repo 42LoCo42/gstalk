@@ -1,0 +1,15 @@
+usage: %s [OPTION]...
+  -h, --help
+    Show this help
+
+  -V, --version
+    Show program version
+
+  -r, --receive port
+    Receive audio on this UDP port
+
+  -t, --transmit host:port
+    Transmit audio to this host's UDP port
+
+  -i, --ignore regex
+    Ignore nodes matching this regex

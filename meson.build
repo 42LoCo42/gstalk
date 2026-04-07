@@ -3,7 +3,7 @@ project(
 	'c',
 	default_options: {
 		'c_std': 'c23',
-		'buildtype': 'debugoptimized',  #
+		'buildtype': 'debugoptimized',
 		'warning_level': '2',
 	},
 )
@@ -17,6 +17,7 @@ executable(
 	'src/pipewire.c',
 	'src/util.c',
 	c_args: [
+		'-DVERSION="@0@"'.format(meson.project_version()),
 		'-Wno-empty-translation-unit',
 		'-Wno-pragma-once-outside-header',
 	],

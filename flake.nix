@@ -7,9 +7,9 @@
         stdenv = pkgs.gccStdenv; # pkgs.clangStdenv;
       in
       rec {
-        packages.default = stdenv.mkDerivation {
+        packages.default = stdenv.mkDerivation (drv: {
           pname = "gstalk";
-          version = "0.0.1";
+          version = "1.0.0";
 
           src = toSource {
             root = ./.;
@@ -36,9 +36,25 @@
               gst-plugins-good
             ];
 
+          preConfigure = ''
+            meson rewrite kwargs set project / version "$version"
+          '';
+
           mesonBuildType = "release";
           mesonFlags = [ "--werror" ];
-        };
+
+          doInstallCheck = true;
+
+          nativeInstallCheckInputs = with pkgs; [
+            versionCheckHook
+          ];
+
+          meta = {
+            description = "gstreamer-based media sharing application";
+            homepage = "https://github.com/42LoCo42/gstalk";
+            mainProgram = drv.pname;
+          };
+        });
 
         devShells.default = (pkgs.mkShell.override {
           inherit stdenv;

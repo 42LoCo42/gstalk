@@ -41,13 +41,11 @@ typedef struct {
 		uint32_t id;
 		PWPorts  ports;
 	} nullSink;
-
-	int seq;
 } Data;
 
 extern Data data;
 
-void launch_pipewire(void);
+void launch_pipewire(const char* ignore_pat);
 
 void mkLink(PWNode* node);
 void unLink(PWNode* node);
@@ -58,6 +56,7 @@ void unLink(PWNode* node);
 
 #include <assert.h>
 #include <pipewire/pipewire.h>
+#include <regex.h>
 
 bool launched = false;
 
@@ -65,6 +64,26 @@ pthread_barrier_t nullSinkBarrier = {0};
 
 PWNodes pwNodes = {0};
 Data    data    = {0};
+
+static regex_t* ignore_rgx = NULL;
+
+static void removeNode(uint32_t id) {
+	ArrayLoop(pwNodes, {
+		if(it->id == id) {
+			spa_hook_remove(it->listener);
+
+			free(it->name);
+			free(it->detail);
+			free(it->ports.ptr);
+			free(it->listener);
+
+			memmove(it, it + 1, sizeof(*it) * (--pwNodes.len - i));
+			break;
+		}
+	});
+
+	pthread_cond_signal(&redisplay);
+}
 
 static int nodeSorter(const void* a, const void* b) {
 	return ((PWNode*) a)->id - ((PWNode*) b)->id;
@@ -79,10 +98,21 @@ static void on_node_info(void*, const struct pw_node_info* info) {
 	ArrayFind(pwNodes, node, it->id == info->id);
 	assert(node && "received node info for unknown node!");
 
+	printf("info for node %u\n", node->id);
 	const char* media_name = spa_dict_lookup(info->props, PW_KEY_MEDIA_NAME);
 	if(media_name) {
-		free(node->detail);
-		node->detail = strdup(media_name);
+		if(ignore_rgx && regexec(ignore_rgx, media_name, 0, NULL, 0) == 0) {
+			removeNode(node->id);
+			printf("delete node %u\n", node->id);
+			return;
+		}
+
+		size_t len = strlen(media_name);
+		if(node->detail == NULL || strlen(node->detail) < len) {
+			node->detail = realloc(node->detail, len + 1);
+		}
+
+		memcpy(node->detail, media_name, len + 1);
 	}
 
 	switch(info->state) {
@@ -134,6 +164,8 @@ static void on_registry_event(
 			"buy more RAM"
 		);
 
+		if(ignore_rgx && regexec(ignore_rgx, new.name, 0, NULL, 0) == 0) return;
+
 		printf("node %u\n", id);
 
 		ArrayAdd(pwNodes, new);
@@ -184,22 +216,21 @@ static void on_registry_event(
 }
 
 static void on_registry_remove_event(void*, uint32_t id) {
-	ArrayLoop(pwNodes, {
-		if(it->id == id) {
-			free(it->name);
-			free(it->detail);
-			free(it->ports.ptr);
-			free(it->listener);
-
-			memmove(it, it + 1, sizeof(*it) * (--pwNodes.len - i));
-			break;
-		}
-	});
-
-	pthread_cond_signal(&redisplay);
+	removeNode(id);
 }
 
-void launch_pipewire(void) {
+void launch_pipewire(const char* ignore_pat) {
+	if(ignore_pat != NULL) {
+		ignore_rgx = malloc(sizeof(*ignore_rgx));
+		int err    = regcomp(ignore_rgx, ignore_pat, REG_EXTENDED | REG_NOSUB);
+		if(err != 0) {
+			size_t len = regerror(err, ignore_rgx, NULL, 0);
+			char*  buf = malloc(len);
+			regerror(err, ignore_rgx, buf, len);
+			errx(1, "failed to parse ignore: %s", buf);
+		}
+	}
+
 	pthread_barrier_init(&nullSinkBarrier, NULL, 2);
 
 	pw_init(NULL, NULL);
@@ -221,6 +252,8 @@ void launch_pipewire(void) {
 		data.core, "adapter", PW_TYPE_INTERFACE_Node, PW_VERSION_NODE,
 		&sink_props->dict, 0
 	);
+
+	pw_properties_free(sink_props);
 
 	static struct spa_hook sink_listener = {0};
 

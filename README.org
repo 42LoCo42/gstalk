@@ -4,9 +4,9 @@
 - ensure direct UDP connectivity (because STUN/TURN is a fuck™, just use tailscale or smth)
 
 ** run
-=gstalk <rx port> <tx host> <tx port>=
-where =rx port= is a UDP port on which you wanna receive audio,
-=tx host= and =tx port= is the peer you wanna send audio to
+=gstalk -r 5000 -t example.org:6000=
+to receive audio on UDP port 5000
+and send audio to example.org's UDP port 6000
 
 then, pick nodes you wanna record using arrow up/down
 and toggle recording with space or enter.
@@ -14,4 +14,5 @@ enable autoadd by pressing a, this will automatically
 record new audio sources as they pop up.
 deafen & mute yourself by respectively pressing d and m.
 
-that's it :3
+if you want to automatically ignore certain nodes,
+add the =-i 'some regex'= flag (using [[https://man.archlinux.org/man/regex.7][POSIX Extended Regular Expressions]])

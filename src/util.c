@@ -1,14 +1,19 @@
 #pragma once
 
 #include <err.h>
+#include <stdio.h>
 #include <stdlib.h>
 
-extern int    ARGC;
-extern char** ARGV;
-extern char*  APP_NAME;
+// defined by glibc
+extern char* program_invocation_short_name;
+#define APP_NAME program_invocation_short_name
 
-#define shift() ((void) (ARGC > 0 || usage()), ARGC--, (ARGV++)[0])
-#define store() (ARGC = argc, ARGV = argv, APP_NAME = shift())
+// defined by meson
+#ifndef VERSION
+#error "no version defined!"
+#endif
+
+[[noreturn]] void usage(bool fail);
 
 #define die(...) err(1, __VA_ARGS__)
 
@@ -64,8 +69,14 @@ extern char*  APP_NAME;
 
 #if __INCLUDE_LEVEL__ == 0 /////////////////////////////////////////////////////
 
-int    ARGC;
-char** ARGV;
-char*  APP_NAME;
+[[noreturn]] void usage(bool fail) {
+	static const char USAGE[] = {
+#embed "usage.txt"
+		, 0
+	};
+
+	fprintf(fail ? stderr : stdout, USAGE, APP_NAME);
+	exit(fail ? EXIT_FAILURE : EXIT_SUCCESS);
+}
 
 #endif
