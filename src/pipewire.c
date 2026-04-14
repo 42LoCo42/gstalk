@@ -16,9 +16,15 @@ ArrayN(struct pw_proxy*, PWLinks);
 
 typedef struct {
 	uint32_t id;
-	char*    name;
-	char*    detail;
-	bool     playing;
+
+	char*  name;
+	size_t name_len;
+
+	char*  desc;
+	size_t desc_len;
+
+	bool playing;
+	bool ignore;
 
 	PWPorts ports;
 	PWLinks links;
@@ -73,7 +79,7 @@ static void removeNode(uint32_t id) {
 			spa_hook_remove(it->listener);
 
 			free(it->name);
-			free(it->detail);
+			free(it->desc);
 			free(it->ports.ptr);
 			free(it->listener);
 
@@ -101,18 +107,18 @@ static void on_node_info(void*, const struct pw_node_info* info) {
 	printf("info for node %u\n", node->id);
 	const char* media_name = spa_dict_lookup(info->props, PW_KEY_MEDIA_NAME);
 	if(media_name) {
-		if(ignore_rgx && regexec(ignore_rgx, media_name, 0, NULL, 0) == 0) {
-			removeNode(node->id);
-			printf("delete node %u\n", node->id);
-			return;
+		size_t detail_len = strlen(media_name);
+		size_t desc_len = node->name_len + detail_len + 4; // 3 = " []" and null
+
+		if(node->desc_len < desc_len) {
+			node->desc = realloc(node->desc, desc_len);
 		}
 
-		size_t len = strlen(media_name);
-		if(node->detail == NULL || strlen(node->detail) < len) {
-			node->detail = realloc(node->detail, len + 1);
-		}
+		node->desc_len = desc_len;
+		snprintf(node->desc, desc_len, "%s [%s]", node->name, media_name);
 
-		memcpy(node->detail, media_name, len + 1);
+		node->ignore =
+			ignore_rgx && regexec(ignore_rgx, node->desc, 0, NULL, 0) == 0;
 	}
 
 	switch(info->state) {
@@ -157,14 +163,18 @@ static void on_registry_event(
 			.listener = malloc(sizeof(*new.listener)),
 		};
 
-		assert(
-			asprintf(
-				&new.name, "%s%s", monitor == 0 ? "Monitor of " : "", name
-			) != -1 &&
-			"buy more RAM"
+		int name_len = asprintf(
+			&new.name, "%s%s", monitor == 0 ? "Monitor of " : "", name
 		);
+		assert(name_len != -1 && "buy more RAM");
+		new.name_len = name_len;
 
-		if(ignore_rgx && regexec(ignore_rgx, new.name, 0, NULL, 0) == 0) return;
+		int desc_len = asprintf(&new.desc, "%s", new.name);
+		assert(desc_len != -1 && "buy more RAM");
+		new.desc_len = desc_len;
+
+		new.ignore =
+			ignore_rgx&& regexec(ignore_rgx, new.desc, 0, NULL, 0) == 0;
 
 		printf("node %u\n", id);
 

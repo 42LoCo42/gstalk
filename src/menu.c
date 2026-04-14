@@ -44,18 +44,12 @@ static void* menu_fn(void*) {
 			if(i == (size_t) selected) printf("[7m");
 
 			printf(
-				"[%s] node %u: %s", it->links.len > 0 ? "x" : " ", it->id,
-				it->name
+				"[%s%s] %s",
+				it->ignore          ? "[1;31m-[22;39m"
+				: it->links.len > 0 ? "[1;32mx[22;39m"
+									: " ",
+				it->playing ? "" : "[2;3m", it->desc
 			);
-
-			if(it->detail) printf(" [%s]", it->detail);
-			if(i == (size_t) selected) printf("[27m");
-
-			puts("");
-
-			ArrayLoopN(it->ports, port, {
-				printf("  port %u.%u\n", port->id, port->ix);
-			});
 
 			printf("[m\n");
 		});
