@@ -9,6 +9,7 @@ void launch_input(void);
 #include "pipewire.c"
 #include "util.c"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
@@ -32,8 +33,6 @@ void launch_input(void) {
 	char buf[32] = {0};
 
 	while(running) {
-		ssize_t nodes = pwNodes.len;
-
 		ssize_t l = read(STDIN_FILENO, buf, sizeof(buf));
 		if(l < 0) die("read input");
 
@@ -53,9 +52,26 @@ void launch_input(void) {
 				running = false;
 				break;
 
+			case '':
+			case '':
+				selected = -1;
+				break;
+
+			case '':
+				selNode(1, -1);
+				break;
+
+			case '':
+				selNode(1, -1);
+				break;
+
 			case ' ':
 			case '\n':
 				PWNode* node = &pwNodes.ptr[selected];
+				assert(
+					!node->ignore && "ignored nodes shouldn't be selectable!"
+				);
+
 				if(node->links.len == 0) {
 					mkLink(node);
 				} else {
@@ -69,10 +85,10 @@ void launch_input(void) {
 			if(strncmp(buf, "[", 2) != 0) break;
 			switch(buf[2]) {
 			case 'A':
-				selected = mod(selected - 1, nodes);
+				selNode(1, -1);
 				break;
 			case 'B':
-				selected = mod(selected + 1, nodes);
+				selNode(1, 1);
 				break;
 			}
 			break;

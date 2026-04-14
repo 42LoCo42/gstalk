@@ -17,6 +17,7 @@ extern char* program_invocation_short_name;
 
 #define die(...) err(1, __VA_ARGS__)
 
+#define max(a, b) ((a) > (b) ? (a) : (b))
 #define mod(x, b) ((((x) % (b)) + (b)) % (b))
 
 #define ArrayN(t, n)                                                           \

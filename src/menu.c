@@ -4,6 +4,7 @@
 #include <sys/types.h>
 
 void launch_menu(void);
+void selNode(int offset, int step);
 
 extern bool    autoadd;
 extern bool    deaf;
@@ -23,7 +24,7 @@ extern pthread_cond_t redisplay;
 bool    autoadd;
 bool    deaf;
 bool    mute;
-ssize_t selected;
+ssize_t selected = -1;
 
 pthread_cond_t redisplay;
 
@@ -32,6 +33,8 @@ static void* menu_fn(void*) {
 	pthread_mutex_init(&mutex, NULL);
 
 	for(;;) {
+		if(selected != -1) selNode(0, 1);
+
 		printf("[H[J");
 		printf("(a) autoadd: %s[m\n", autoadd ? "[1;32myes" : "[1;31mno");
 		printf("(d) deaf:    %s[m\n", deaf ? "[1;32myes" : "[1;31mno");
@@ -54,11 +57,6 @@ static void* menu_fn(void*) {
 			printf("[m\n");
 		});
 
-		if(pwNodes.len > 0 && selected >= (ssize_t) pwNodes.len) {
-			selected = 0;
-			continue;
-		}
-
 		pthread_cond_wait(&redisplay, &mutex);
 	}
 
@@ -68,6 +66,20 @@ static void* menu_fn(void*) {
 void launch_menu(void) {
 	static pthread_t menu_thread = {0};
 	pthread_create(&menu_thread, NULL, menu_fn, NULL);
+}
+
+void selNode(int offset, int step) {
+	ssize_t new = -1;
+
+	for(ssize_t i = offset; i <= (ssize_t) pwNodes.len; i++) {
+		size_t j = mod(max(selected, 0) + i * step, (ssize_t) pwNodes.len);
+		if(!pwNodes.ptr[j].ignore) {
+			new = j;
+			break;
+		}
+	}
+
+	selected = new;
 }
 
 #endif
