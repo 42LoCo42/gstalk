@@ -60,7 +60,7 @@ static void* menu_fn(void*) {
 			printf("[m\n");
 		});
 
-		if(selected >= (ssize_t) pwNodes.len) {
+		if(pwNodes.len > 0 && selected >= (ssize_t) pwNodes.len) {
 			selected = 0;
 			continue;
 		}
