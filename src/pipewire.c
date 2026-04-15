@@ -64,6 +64,8 @@ void unLink(PWNode* node);
 #include <pipewire/pipewire.h>
 #include <regex.h>
 
+#define printf(...)
+
 bool launched = false;
 
 pthread_barrier_t nullSinkBarrier = {0};
@@ -297,7 +299,7 @@ void launch_pipewire(const char* ignore_pat) {
 	}
 
 	launched = true;
-	puts("launched!");
+	printf("launched!\n");
 }
 
 void mkLink(PWNode* node) {
