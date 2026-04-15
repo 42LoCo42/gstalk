@@ -218,7 +218,8 @@ static void on_registry_event(
 			ArrayFind(pwNodes, node, it->id == node_id);
 			if(node) {
 				ArrayAdd(node->ports, port);
-				if(launched && autoadd && node->ports.len == 2) mkLink(node);
+				if(launched && autoadd && !node->ignore && node->ports.len == 2)
+					mkLink(node);
 				printf("port node %u.%u for %u\n", port.id, port.ix, node_id);
 			}
 		}
