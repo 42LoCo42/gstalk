@@ -19,11 +19,14 @@ static struct termios term = {0};
 
 static void cleanup(void) {
 	tcsetattr(STDIN_FILENO, TCSANOW, &term);
+	printf("[?25h\n");
 }
 
 void launch_input(void) {
 	if(tcgetattr(STDIN_FILENO, &term) < 0) die("tcgetattr");
 	atexit(cleanup);
+
+	printf("[?25l\n");
 
 	struct termios raw = term;
 	raw.c_lflag &= ~(ECHO | ICANON);
