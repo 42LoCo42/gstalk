@@ -10,6 +10,7 @@ void launch_input(void);
 #include "util.c"
 
 #include <assert.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <termios.h>
@@ -24,7 +25,11 @@ static void cleanup(void) {
 
 void launch_input(void) {
 	if(tcgetattr(STDIN_FILENO, &term) < 0) die("tcgetattr");
+
 	atexit(cleanup);
+	signal(SIGINT, (void*) cleanup);
+	signal(SIGQUIT, (void*) cleanup);
+	signal(SIGTERM, (void*) cleanup);
 
 	printf("[?25l\n");
 
