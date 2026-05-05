@@ -34,7 +34,8 @@ typedef struct {
 
 Array(PWNode);
 
-extern PWNodes pwNodes;
+extern PWNodes applications;
+extern PWNodes microphones;
 
 typedef struct {
 	struct pw_thread_loop* thread_loop;
@@ -70,13 +71,15 @@ bool launched = false;
 
 pthread_barrier_t nullSinkBarrier = {0};
 
-PWNodes pwNodes = {0};
-Data    data    = {0};
+PWNodes applications = {0};
+PWNodes microphones  = {0};
+
+Data data = {0};
 
 static regex_t* ignore_rgx = NULL;
 
-static void removeNode(uint32_t id) {
-	ArrayLoop(pwNodes, {
+static void removeNode(PWNodes* nodes, uint32_t id) {
+	ArrayLoop(*nodes, {
 		if(it->id == id) {
 			spa_hook_remove(it->listener);
 
@@ -85,12 +88,10 @@ static void removeNode(uint32_t id) {
 			free(it->ports.ptr);
 			free(it->listener);
 
-			memmove(it, it + 1, sizeof(*it) * (--pwNodes.len - i));
+			memmove(it, it + 1, sizeof(*it) * (--nodes->len - i));
 			break;
 		}
 	});
-
-	pthread_cond_signal(&redisplay);
 }
 
 static int nodeSorter(const void* a, const void* b) {
@@ -102,11 +103,14 @@ static void on_bound_id(void*, uint32_t id) {
 	printf("sink %u\n", id);
 }
 
-static void on_node_info(void*, const struct pw_node_info* info) {
-	ArrayFind(pwNodes, node, it->id == info->id);
+static void on_node_info(void* data, const struct pw_node_info* info) {
+	PWNodes* nodes = data;
+
+	ArrayFind(*nodes, node, it->id == info->id);
 	assert(node && "received node info for unknown node!");
 
 	printf("info for node %u\n", node->id);
+
 	const char* media_name = spa_dict_lookup(info->props, PW_KEY_MEDIA_NAME);
 	if(media_name) {
 		size_t detail_len = strlen(media_name);
@@ -124,15 +128,12 @@ static void on_node_info(void*, const struct pw_node_info* info) {
 	}
 
 	switch(info->state) {
-	case PW_NODE_STATE_ERROR:
-	case PW_NODE_STATE_CREATING:
-	case PW_NODE_STATE_SUSPENDED:
-	case PW_NODE_STATE_IDLE:
-		node->playing = false;
-		break;
-
 	case PW_NODE_STATE_RUNNING:
 		node->playing = true;
+		break;
+
+	default:
+		node->playing = false;
 		break;
 	}
 
@@ -144,14 +145,23 @@ static void on_registry_event(
 	const struct spa_dict* props
 ) {
 	const char* mediaClass = NULL;
-	int         monitor    = 1;
 
-	if(strcmp(type, PW_TYPE_INTERFACE_Node) == 0 && id != data.nullSink.id &&
-	   (mediaClass = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS)) &&
-	   ((monitor = strcmp(mediaClass, "Audio/Sink")) &
-	    strcmp(mediaClass, "Audio/Source") &
-	    strcmp(mediaClass, "Stream/Output/Audio")) == 0) {
-		ArrayFind(pwNodes, node, it->id == id);
+	if(strcmp(type, PW_TYPE_INTERFACE_Node) == 0 && //
+	   id != data.nullSink.id &&                    //
+	   (mediaClass = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS))) {
+		PWNodes* nodes  = NULL;
+		bool     is_app = false;
+
+		if(strcmp(mediaClass, "Audio/Source") == 0) {
+			nodes = &microphones;
+		} else if(strcmp(mediaClass, "Stream/Output/Audio") == 0) {
+			nodes  = &applications;
+			is_app = true;
+		} else {
+			return;
+		}
+
+		ArrayFind(*nodes, node, it->id == id);
 		assert(!node && "existing node re-added???");
 
 		const char* name = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
@@ -160,28 +170,25 @@ static void on_registry_event(
 
 		if(strstr(name, "gstalk") != NULL) return;
 
+		size_t name_len = strlen(name);
+
 		PWNode new = {
 			.id       = id,
 			.listener = malloc(sizeof(*new.listener)),
+
+			.desc     = strdup(name),
+			.desc_len = name_len,
 		};
 
-		int name_len = asprintf(
-			&new.name, "%s%s", monitor == 0 ? "Monitor of " : "", name
-		);
-		assert(name_len != -1 && "buy more RAM");
-		new.name_len = name_len;
+		if(is_app) {
+			new.name     = strdup(name);
+			new.name_len = name_len;
 
-		int desc_len = asprintf(&new.desc, "%s", new.name);
-		assert(desc_len != -1 && "buy more RAM");
-		new.desc_len = desc_len;
+			new.ignore = true;
+		}
 
-		new.ignore =
-			ignore_rgx&& regexec(ignore_rgx, new.desc, 0, NULL, 0) == 0;
-
-		printf("node %u\n", id);
-
-		ArrayAdd(pwNodes, new);
-		node = &ArrayLast(pwNodes);
+		ArrayAdd(*nodes, new);
+		node = &ArrayLast(*nodes);
 
 		static struct pw_node_events node_events = {
 			.version = PW_VERSION_NODE_EVENTS,
@@ -190,9 +197,10 @@ static void on_registry_event(
 
 		struct pw_node* nodeRef =
 			pw_registry_bind(data.registry, id, type, version, 0);
-		pw_node_add_listener(nodeRef, node->listener, &node_events, NULL);
 
-		qsort(pwNodes.ptr, pwNodes.len, sizeof(pwNodes.ptr[0]), nodeSorter);
+		pw_node_add_listener(nodeRef, node->listener, &node_events, nodes);
+
+		qsort(nodes->ptr, nodes->len, sizeof(nodes->ptr[0]), nodeSorter);
 	} else if(strcmp(type, PW_TYPE_INTERFACE_Port) == 0) {
 		const char* node_id_str = spa_dict_lookup(props, PW_KEY_NODE_ID);
 		assert(node_id_str && "port must have a node ID!");
@@ -215,11 +223,17 @@ static void on_registry_event(
 			printf("port sink %u.%u for %u\n", port.id, port.ix, node_id);
 			pthread_barrier_wait(&nullSinkBarrier);
 		} else if(strcmp(direction, "out") == 0) {
-			ArrayFind(pwNodes, node, it->id == node_id);
+			PWNode* node = NULL;
+
+			if(!node) ArrayFindI(applications, node, it->id == node_id);
+			if(!node) ArrayFindI(microphones, node, it->id == node_id);
+
 			if(node) {
 				ArrayAdd(node->ports, port);
+
 				if(launched && autoadd && !node->ignore && node->ports.len == 2)
 					mkLink(node);
+
 				printf("port node %u.%u for %u\n", port.id, port.ix, node_id);
 			}
 		}
@@ -229,7 +243,9 @@ static void on_registry_event(
 }
 
 static void on_registry_remove_event(void*, uint32_t id) {
-	removeNode(id);
+	removeNode(&applications, id);
+	removeNode(&microphones, id);
+	pthread_cond_signal(&redisplay);
 }
 
 void launch_pipewire(const char* ignore_pat) {

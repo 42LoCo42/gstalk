@@ -6,9 +6,10 @@
 void launch_menu(void);
 void selNode(int offset, int step);
 
-extern bool    autoadd;
-extern bool    deaf;
-extern bool    mute;
+extern bool autoadd;
+extern bool deaf;
+extern bool mute;
+
 extern ssize_t selected;
 
 extern pthread_cond_t redisplay;
@@ -21,9 +22,10 @@ extern pthread_cond_t redisplay;
 
 #include <stdio.h>
 
-bool    autoadd;
-bool    deaf;
-bool    mute;
+bool autoadd;
+bool deaf;
+bool mute;
+
 ssize_t selected = -1;
 
 pthread_cond_t redisplay;
@@ -40,9 +42,25 @@ static void* menu_fn(void*) {
 		printf("(d) deaf:    %s[m\n", deaf ? "[1;32myes" : "[1;31mno");
 		printf("(m) mute:    %s[m\n", mute ? "[1;32myes" : "[1;31mno");
 
-		puts("\n========================================\n");
+		puts("\n========== Microphones ===========\n");
 
-		ArrayLoop(pwNodes, {
+		ArrayLoop(microphones, {
+			if(!it->playing) printf("[2;3m");
+
+			printf(
+				"[%s%s] %s",
+				it->ignore          ? "[1;31m-[22;39m"
+				: it->links.len > 0 ? "[1;32mx[22;39m"
+									: " ",
+				it->playing ? "" : "[2;3m", it->desc
+			);
+
+			printf("[m\n");
+		});
+
+		puts("\n========== Applications ==========\n");
+
+		ArrayLoop(applications, {
 			if(!it->playing) printf("[2;3m");
 			if(i == (size_t) selected) printf("[7m");
 
@@ -71,9 +89,9 @@ void launch_menu(void) {
 void selNode(int offset, int step) {
 	ssize_t new = -1;
 
-	for(ssize_t i = offset; i <= (ssize_t) pwNodes.len; i++) {
-		size_t j = mod(max(selected, 0) + i * step, (ssize_t) pwNodes.len);
-		if(!pwNodes.ptr[j].ignore) {
+	for(ssize_t i = offset; i <= (ssize_t) applications.len; i++) {
+		size_t j = mod(max(selected, 0) + i * step, (ssize_t) applications.len);
+		if(!applications.ptr[j].ignore) {
 			new = j;
 			break;
 		}

@@ -48,8 +48,7 @@ extern char* program_invocation_short_name;
 		body                                                                   \
 	}
 
-#define ArrayFindN(arr, result, it, pred)                                      \
-	typeof((arr).ptr[0])* result = NULL;                                       \
+#define ArrayFindI(arr, result, pred)                                          \
 	ArrayLoopN(arr, it, {                                                      \
 		if(pred) {                                                             \
 			result = it;                                                       \
@@ -57,7 +56,9 @@ extern char* program_invocation_short_name;
 		}                                                                      \
 	})
 
-#define ArrayFind(arr, result, pred) ArrayFindN(arr, result, it, pred)
+#define ArrayFind(arr, result, pred)                                           \
+	typeof((arr).ptr[0])* result = NULL;                                       \
+	ArrayFindI(arr, result, pred)
 
 #define ArrayLast(arr) (arr).ptr[(arr).len - 1]
 

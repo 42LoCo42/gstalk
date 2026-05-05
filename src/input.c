@@ -75,7 +75,7 @@ void launch_input(void) {
 
 			case ' ':
 			case '\n':
-				PWNode* node = &pwNodes.ptr[selected];
+				PWNode* node = &applications.ptr[selected];
 				assert(
 					!node->ignore && "ignored nodes shouldn't be selectable!"
 				);
